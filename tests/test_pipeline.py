@@ -2,6 +2,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
+import requests
+
 from app import classify, fresher, normalize, verify
 from app.config import load_config
 from app.sources import adzuna, ats
@@ -84,6 +86,33 @@ class Sources(unittest.TestCase):
         g, l = ats.fetch_greenhouse(cfg), ats.fetch_lever(cfg)
         self.assertEqual(g[0].description, "Hello world")
         self.assertEqual(l[0].city, "Pune")
+
+    @patch("app.sources.ats.requests.get")
+    def test_ashby_and_workday_parse(self, get):
+        ashby, workday = MagicMock(), MagicMock()
+        ashby.json.return_value = {"jobs": [{"title": "Graduate Engineer", "location": {"city": "Bengaluru"},
+                                             "createdAt": 1789000000000, "jobUrl": "http://a", "description": "<p>Build</p>"}]}
+        workday.text = '<a href="https://acme.workdayjobs.com/en-us/job/123">Software Engineer</a>'
+        get.side_effect = [ashby, workday]
+        cfg = {**CFG, "company_boards": {"ashby": ["acme"], "workday": ["acme"]}}
+        a, w = ats.fetch_ashby(cfg), ats.fetch_workday(cfg)
+        self.assertEqual(a[0].city, "Bengaluru")
+        self.assertEqual(a[0].url, "http://a")
+        self.assertEqual(w[0].title, "Software Engineer")
+        self.assertIn("acme.workdayjobs.com", w[0].url)
+
+    @patch("app.sources.ats.requests.get")
+    def test_invalid_greenhouse_board_is_skipped(self, get):
+        exc = requests.HTTPError(response=MagicMock(status_code=404))
+        get.side_effect = exc
+        cfg = {**CFG, "company_boards": {"greenhouse": ["does-not-exist"]}}
+        self.assertEqual(ats.fetch_greenhouse(cfg), [])
+
+    @patch("app.sources.ats.requests.get")
+    def test_invalid_workday_domain_is_skipped(self, get):
+        get.side_effect = requests.exceptions.ConnectionError("DNS failed")
+        cfg = {**CFG, "company_boards": {"workday": ["totally-unknown-company"]}}
+        self.assertEqual(ats.fetch_workday(cfg), [])
 
 
 class Verify(unittest.TestCase):

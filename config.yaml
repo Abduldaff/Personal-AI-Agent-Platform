@@ -69,6 +69,8 @@ skills: [python, java, javascript, typescript, react, angular, node, sql, mysql,
 company_boards:
   greenhouse: []            # e.g. [stripe, airbnb]   -> boards.greenhouse.io/<token>
   lever: []                 # e.g. [spotify]          -> jobs.lever.co/<token>
+  ashby: []                 # e.g. [acme]             -> jobs.ashbyhq.com/<company>
+  workday: []               # e.g. [acme]             -> <company>.workdayjobs.com or custom Workday tenant
 
 # Verification thresholds
 verify:

@@ -15,4 +15,8 @@ def available_sources(cfg: dict, mock_mode: bool) -> dict:
         sources["greenhouse"] = ats.fetch_greenhouse
     if boards.get("lever"):
         sources["lever"] = ats.fetch_lever
+    if boards.get("ashby"):
+        sources["ashby"] = ats.fetch_ashby
+    if boards.get("workday"):
+        sources["workday"] = ats.fetch_workday
     return sources
