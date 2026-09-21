@@ -1,0 +1,78 @@
+# ------------------------------------------------------------------
+# Fresher Job Market Intelligence Agent - configuration
+# Edit this file to change country, cities, domains and tracked companies.
+# ------------------------------------------------------------------
+
+country: in                 # Adzuna country code: in, gb, us, au, ca, de, ...
+cities: []                  # e.g. ["Hyderabad", "Bengaluru", "Pune"]; empty = whole country
+window_days: 7              # "this week" window used for trend comparison
+max_days_old: 14            # how far back to fetch postings
+
+# What counts as a "fresher" role
+fresher:
+  max_years_experience: 1   # experience upper bound accepted (0-1 yrs => 1)
+  include_keywords:
+    - fresher
+    - freshers
+    - graduate
+    - entry level
+    - entry-level
+    - trainee
+    - intern
+    - internship
+    - junior
+    - new grad
+    - campus
+    - associate engineer
+    - 0-1 year
+    - 0-2 year
+  exclude_title_keywords:
+    - senior
+    - sr.
+    - lead
+    - principal
+    - staff
+    - manager
+    - head
+    - director
+    - architect
+
+# Search keywords sent to job APIs (one call per keyword)
+search_keywords:
+  - fresher
+  - graduate trainee
+  - entry level
+  - junior developer
+  - intern
+
+# Fixed domain taxonomy. Keywords are matched against title (x3) and description (x1).
+domains:
+  Software Development: [software engineer, software developer, developer, graduate engineer, graduate engineer trainee, engineer trainee, trainee engineer, full stack, fullstack, backend, frontend, java, react, node, .net, sde, web developer, mobile developer, android, ios]
+  Data & Analytics: [data analyst, data engineer, business analyst, analytics, power bi, tableau, sql, etl, bi developer]
+  AI / ML: [machine learning, ml engineer, ai engineer, deep learning, nlp, generative ai, llm, data scientist, computer vision]
+  Cloud & DevOps: [devops, cloud, aws, azure, gcp, kubernetes, docker, sre, site reliability, infrastructure]
+  Cybersecurity: [security, cyber, soc analyst, penetration, infosec, vulnerability]
+  QA & Testing: [qa, quality assurance, tester, testing, test engineer, automation testing, selenium, sdet]
+  IT Support: [it support, technical support, helpdesk, help desk, system administrator, service desk, desktop support]
+  Sales & Business Development: [sales, business development, bdr, sdr, account executive, inside sales, presales]
+  Marketing: [marketing, seo, content, social media, digital marketing, brand]
+  Finance & Accounting: [accountant, accounting, finance, audit, financial analyst, banking, payroll, tax]
+  HR & Recruitment: [hr, human resources, recruiter, talent acquisition, recruitment, people operations]
+  Customer Support: [customer support, customer service, customer success, call center, bpo, voice process, chat support]
+  Core Engineering: [mechanical, civil, electrical, electronics, embedded, vlsi, manufacturing, production engineer]
+
+# Skills to extract from descriptions (simple keyword matching)
+skills: [python, java, javascript, typescript, react, angular, node, sql, mysql, postgresql, mongodb, aws, azure, gcp, docker, kubernetes, git, linux, excel, power bi, tableau, machine learning, deep learning, nlp, selenium, spring boot, django, flask, c++, c#, .net, html, css, rest api, communication, problem solving]
+
+# Company career pages tracked through public ATS endpoints (free, clean JSON).
+# Tokens are the company slug used on the board URL - verify each one exists.
+company_boards:
+  greenhouse: []            # e.g. [stripe, airbnb]   -> boards.greenhouse.io/<token>
+  lever: []                 # e.g. [spotify]          -> jobs.lever.co/<token>
+
+# Verification thresholds
+verify:
+  min_fresher_jobs: 30      # fewer than this => "low sample" warning
+  spike_ratio: 10.0         # week-over-week jump above this is flagged
+  max_other_domain_share: 0.35
+  max_retries: 2
