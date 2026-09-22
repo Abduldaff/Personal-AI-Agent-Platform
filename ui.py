@@ -1,4 +1,6 @@
 """Dashboard:  streamlit run ui.py"""
+from functools import lru_cache
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -25,6 +27,12 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+@st.cache_data(ttl=60)
+def get_dashboard_data(window_days: int, db_path: str):
+    cfg = config.load_config()
+    return analyze.compute_metrics(cfg), db.read_runs(), cfg
+
 
 cfg = config.load_config()
 company_summary = config.get_company_board_summary(cfg)
@@ -58,14 +66,13 @@ with st.sidebar:
             st.code("\n".join(st.session_state["log"]), language="text")
 
 # ------------------------------------------------------------------ data
-metrics = analyze.compute_metrics(cfg)
+metrics, runs, cfg = get_dashboard_data(cfg["window_days"], str(config.DB_PATH))
 if metrics.get("empty"):
     st.title("Fresher job market")
     st.info("No postings stored yet. Use **Run the agent now** in the sidebar. "
             + ("Demo data needs no keys." if demo else "Live data needs ADZUNA_APP_ID and ADZUNA_APP_KEY in .env."))
     st.stop()
 
-runs = db.read_runs()
 latest = {}
 for _, r in runs.iterrows():
     latest.setdefault(r["source"], {"fetched": int(r["jobs_fetched"]), "error": r["error"] or ""})
@@ -151,7 +158,7 @@ with tab_trend:
     st.caption("Postings are placed by their posted date when the source provides one, otherwise by the day the agent first saw them.")
 
 with tab_jobs:
-    jobs = db.read_jobs(True)
+    jobs = db.read_jobs(True, limit=500)
     f1, f2, f3 = st.columns(3)
     dom = f1.multiselect("Domain", sorted(jobs["domain"].unique()))
     city = f2.multiselect("City", sorted(x for x in jobs["city"].unique() if x))

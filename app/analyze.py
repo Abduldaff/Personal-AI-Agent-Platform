@@ -18,10 +18,15 @@ def _window(df: pd.DataFrame, end: pd.Timestamp, days: int, offset: int = 0) -> 
 
 def compute_metrics(cfg: dict) -> dict:
     w = cfg.get("window_days", 7)
-    fresh, alljobs = db.read_jobs(True), db.read_jobs(False)
+    end = pd.Timestamp.today().normalize()
+    window_start = (end - pd.Timedelta(days=2 * w + 7)).strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
+
+    fresh = db.read_jobs(True, start_date=window_start, end_date=end_str)
+    alljobs = db.read_jobs(False, start_date=window_start, end_date=end_str)
     if alljobs.empty:
         return {"empty": True}
-    end = pd.Timestamp.today().normalize()
+
     f_now, f_prev = _window(fresh, end, w, 0), _window(fresh, end, w, 1)
     a_now = _window(alljobs, end, w, 0)
 

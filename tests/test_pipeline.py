@@ -1,5 +1,6 @@
 """Run with:  python -m unittest discover tests"""
 import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import requests
@@ -113,6 +114,45 @@ class Sources(unittest.TestCase):
         get.side_effect = requests.exceptions.ConnectionError("DNS failed")
         cfg = {**CFG, "company_boards": {"workday": ["totally-unknown-company"]}}
         self.assertEqual(ats.fetch_workday(cfg), [])
+
+
+class Config(unittest.TestCase):
+    def test_company_boards_csv_is_loaded(self):
+        cfg = load_config()
+        boards = cfg.get("company_boards", {})
+        self.assertIn("greenhouse", boards)
+        self.assertIn("google", boards["greenhouse"])
+        self.assertIn("microsoft", boards["ashby"])
+        self.assertGreater(sum(len(v) for v in boards.values() if isinstance(v, list)), 0)
+
+    def test_company_board_summary_counts_loaded_slugs(self):
+        cfg = load_config()
+        summary = {source: len(vals) for source, vals in cfg["company_boards"].items() if isinstance(vals, list)}
+        self.assertIn("greenhouse", summary)
+        self.assertGreater(summary["greenhouse"], 0)
+        self.assertGreater(summary["workday"], 0)
+
+    def test_company_board_cap_is_400(self):
+        cfg = load_config()
+        total = sum(len(vals) for vals in cfg["company_boards"].values() if isinstance(vals, list))
+        self.assertLessEqual(total, 400)
+
+    @patch("app.config.PdfReader")
+    def test_pdf_company_names_are_imported(self, reader_cls):
+        from app import config
+
+        class FakePage:
+            def extract_text(self):
+                return "Company Name\nAcme Corp\nBeta Labs\nhttps://example.com\nNot provided\n"
+
+        reader_cls.return_value.pages = [FakePage()]
+        names = config.extract_company_names_from_pdf(Path("dummy.pdf"))
+        self.assertIn("Acme Corp", names)
+        self.assertIn("Beta Labs", names)
+
+        merged = config.refresh_company_boards_from_pdf(Path("dummy.pdf"))
+        self.assertTrue(any("acme-corp" in slug for slug in merged.get("greenhouse", [])))
+        self.assertTrue(any("beta-labs" in slug for slug in merged.get("lever", [])))
 
 
 class Verify(unittest.TestCase):

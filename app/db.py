@@ -3,6 +3,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
+from typing import Optional
 
 import pandas as pd
 
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS runs (
     run_date TEXT, source TEXT, jobs_fetched INTEGER, error TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_date);
+CREATE INDEX IF NOT EXISTS idx_jobs_first_seen ON jobs(first_seen);
+CREATE INDEX IF NOT EXISTS idx_jobs_is_fresher ON jobs(is_fresher);
+CREATE INDEX IF NOT EXISTS idx_jobs_source_active ON jobs(source, active);
 """
 
 
@@ -76,10 +80,30 @@ def log_run(source: str, fetched: int, error: str = "") -> None:
                      (date.today().isoformat(), source, fetched, error))
 
 
-def read_jobs(only_fresher: bool = True) -> pd.DataFrame:
+def read_jobs(only_fresher: bool = True, start_date: Optional[str] = None,
+              end_date: Optional[str] = None, limit: Optional[int] = None) -> pd.DataFrame:
+    clauses = []
+    params = []
+    if only_fresher:
+        clauses.append("is_fresher = 1")
+    if start_date:
+        clauses.append("(posted_date >= ? OR (posted_date IS NULL AND first_seen >= ?))")
+        params.extend([start_date, start_date])
+    if end_date:
+        clauses.append("(posted_date <= ? OR (posted_date IS NULL AND first_seen <= ?))")
+        params.extend([end_date, end_date])
+
+    q = "SELECT * FROM jobs"
+    if clauses:
+        q += " WHERE " + " AND ".join(clauses)
+    q += " ORDER BY first_seen DESC"
+    if limit is not None:
+        q += " LIMIT ?"
+        params.append(limit)
+
     with connect() as conn:
-        q = "SELECT * FROM jobs" + (" WHERE is_fresher=1" if only_fresher else "")
-        df = pd.read_sql_query(q, conn)
+        df = pd.read_sql_query(q, conn, params=params)
+
     if not df.empty:
         df["event_date"] = pd.to_datetime(df["posted_date"].replace("", None).fillna(df["first_seen"]),
                                           errors="coerce")

@@ -11,7 +11,7 @@ def _kw_regex(words: list[str]) -> re.Pattern:
     return re.compile(r"(?<![\w])(?:" + "|".join(re.escape(w) for w in words) + r")(?![\w])", re.I)
 
 
-def extract_experience(text: str) -> tuple[float | None, float | None]:
+def extract_experience(text: str):
     m = RANGE.search(text)
     if m:
         return float(m.group(1)), float(m.group(2))

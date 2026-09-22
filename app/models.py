@@ -1,6 +1,7 @@
 """Common job schema shared by every source."""
 from dataclasses import dataclass, field, asdict
 from datetime import date
+from typing import Optional
 
 
 @dataclass
@@ -16,9 +17,9 @@ class Job:
     salary_text: str = ""
     # filled by the pipeline
     id: str = ""
-    is_fresher: int | None = None  # 1 / 0 / None (ambiguous)
-    exp_min: float | None = None
-    exp_max: float | None = None
+    is_fresher: Optional[int] = None  # 1 / 0 / None (ambiguous)
+    exp_min: Optional[float] = None
+    exp_max: Optional[float] = None
     domain: str = ""
     skills: list[str] = field(default_factory=list)
 
