@@ -15,10 +15,39 @@ st.set_page_config(page_title="Fresher Job Market", page_icon="📈", layout="wi
 st.markdown(
     """
     <style>
-    .stApp { background: linear-gradient(180deg, #f6f9fc 0%, #eaf1f7 100%); }
+    :root { color-scheme: light; }
+    .stApp {
+        background: linear-gradient(180deg, #f6f9fc 0%, #eaf1f7 100%);
+        color: #1f2a3a;
+    }
     .block-container { padding-top: 1.5rem; }
-    div[data-testid="stSidebar"] > div { background: linear-gradient(180deg, #ebf3f6 0%, #e6edf5 100%); }
-    .stRadio label, .stCheckbox label { color: #1f2a3a; font-weight: 600; }
+    section[data-testid="stSidebar"],
+    section[data-testid="stSidebar"] > div,
+    [data-testid="stSidebarContent"] {
+        background: linear-gradient(180deg, #ebf3f6 0%, #e6edf5 100%) !important;
+    }
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid rgba(31, 42, 58, 0.12);
+        color: #1f2a3a !important;
+    }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p,
+    .stApp [data-testid="stMarkdownContainer"],
+    .stApp [data-testid="stWidgetLabel"],
+    .stApp [data-testid="stWidgetLabel"] p {
+        color: #1f2a3a;
+    }
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] label *,
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+        color: #1f2a3a !important;
+    }
+    .stRadio label, .stCheckbox label { font-weight: 600; }
     .metric-container { background: rgba(255,255,255,0.8); border: 1px solid rgba(31,42,58,0.08); border-radius: 16px; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08); }
     .stTabs [role='tablist'] { gap: 0.5rem; }
     .stTabs [role='tab'] { border-radius: 10px 10px 0 0; padding: 0.5rem 1rem; }
@@ -29,7 +58,7 @@ st.markdown(
 )
 
 @st.cache_data(ttl=60)
-def get_dashboard_data(window_days: int, db_path: str):
+def get_dashboard_data(window_days: int, db_path: str, db_mtime_ns: int):
     cfg = config.load_config()
     return analyze.compute_metrics(cfg), db.read_runs(), cfg
 
@@ -66,7 +95,8 @@ with st.sidebar:
             st.code("\n".join(st.session_state["log"]), language="text")
 
 # ------------------------------------------------------------------ data
-metrics, runs, cfg = get_dashboard_data(cfg["window_days"], str(config.DB_PATH))
+db_mtime_ns = config.DB_PATH.stat().st_mtime_ns if config.DB_PATH.exists() else 0
+metrics, runs, cfg = get_dashboard_data(cfg["window_days"], str(config.DB_PATH), db_mtime_ns)
 if metrics.get("empty"):
     st.title("Fresher job market")
     st.info("No postings stored yet. Use **Run the agent now** in the sidebar. "
