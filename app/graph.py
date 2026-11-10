@@ -4,6 +4,7 @@ collect -> normalize -> label_fresher -> classify -> store -> analyze -> verify 
    ^                                                                            |
    +---------------------- retry failed sources (max_retries) -----------------+
 """
+from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -46,18 +47,31 @@ def collect(state: AgentState) -> dict:
     raw = list(state.get("raw_jobs", []))
     status = dict(state.get("source_status", {}))
     log = state.get("log", [])
-    for name in pending:
+
+    def fetch_source(name: str):
         try:
-            jobs = sources[name](state["cfg"], attempt)
+            return name, sources[name](state["cfg"], attempt), None
+        except Exception as e:
+            return name, [], e
+
+    if pending:
+        with ThreadPoolExecutor(max_workers=min(5, len(pending))) as executor:
+            fetched_sources = list(executor.map(fetch_source, pending))
+    else:
+        fetched_sources = []
+
+    for name, jobs, error in fetched_sources:
+        if error is None:
             raw += [j.to_dict() for j in jobs]
             status[name] = {"fetched": len(jobs), "error": "", "retryable": True}
             db.log_run(name, len(jobs))
             log = _log({"log": log}, f"[collect] {name}: {len(jobs)} postings")
-        except SourceConfigError as e:
-            status[name] = {"fetched": 0, "error": str(e), "retryable": False}
-            db.log_run(name, 0, str(e))
-            log = _log({"log": log}, f"[collect] {name}: SKIPPED ({e})")
-        except Exception as e:  # network errors, HTTP errors, ...
+        elif isinstance(error, SourceConfigError):
+            status[name] = {"fetched": 0, "error": str(error), "retryable": False}
+            db.log_run(name, 0, str(error))
+            log = _log({"log": log}, f"[collect] {name}: SKIPPED ({error})")
+        else:  # network errors, HTTP errors, ...
+            e = error
             status[name] = {"fetched": 0, "error": f"{type(e).__name__}: {e}", "retryable": True}
             db.log_run(name, 0, str(e))
             log = _log({"log": log}, f"[collect] {name}: FAILED ({type(e).__name__}: {e})")

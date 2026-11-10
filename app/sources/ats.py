@@ -1,10 +1,21 @@
 """Public company job-board endpoints (Greenhouse, Lever, Ashby, Workday). No API key needed."""
+from concurrent.futures import ThreadPoolExecutor
 import re
 from datetime import datetime, timezone
+from typing import Callable
 
 import requests
 
 from ..models import Job
+
+MAX_WORKERS = 8
+
+
+def _fetch_boards(tokens: list[str], fetch_one: Callable[[str], list[Job]]) -> list[Job]:
+    if not tokens:
+        return []
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(tokens))) as executor:
+        return [job for jobs in executor.map(fetch_one, tokens) for job in jobs]
 
 
 def _strip(html: str) -> str:
@@ -44,8 +55,7 @@ def _normalize_date(value):
 
 
 def fetch_greenhouse(cfg: dict, attempt: int = 0) -> list[Job]:
-    jobs: list[Job] = []
-    for token in cfg["company_boards"].get("greenhouse", []):
+    def fetch_one(token: str) -> list[Job]:
         try:
             r = requests.get(
                 f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs",
@@ -55,25 +65,25 @@ def fetch_greenhouse(cfg: dict, attempt: int = 0) -> list[Job]:
             r.raise_for_status()
             payload = r.json()
         except requests.RequestException:
-            continue
-        for it in payload.get("jobs", []):
-            jobs.append(Job(
+            return []
+        return [Job(
                 title=it.get("title", ""), company=token, city=(it.get("location") or {}).get("name", ""),
                 country=cfg.get("country", ""), posted_date=(it.get("updated_at") or "")[:10],
                 source="greenhouse", url=it.get("absolute_url", ""), description=_strip(it.get("content", "")),
-            ))
-    return jobs
+            ) for it in payload.get("jobs", [])]
+
+    return _fetch_boards(cfg["company_boards"].get("greenhouse", []), fetch_one)
 
 
 def fetch_lever(cfg: dict, attempt: int = 0) -> list[Job]:
-    jobs: list[Job] = []
-    for token in cfg["company_boards"].get("lever", []):
+    def fetch_one(token: str) -> list[Job]:
         try:
             r = requests.get(f"https://api.lever.co/v0/postings/{token}", params={"mode": "json"}, timeout=30)
             r.raise_for_status()
             payload = r.json()
         except requests.RequestException:
-            continue
+            return []
+        jobs = []
         for it in payload:
             ts = it.get("createdAt")
             posted = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).date().isoformat() if ts else ""
@@ -83,21 +93,23 @@ def fetch_lever(cfg: dict, attempt: int = 0) -> list[Job]:
                 country=cfg.get("country", ""), posted_date=posted, source="lever",
                 url=it.get("hostedUrl", ""), description=it.get("descriptionPlain", ""),
             ))
-    return jobs
+        return jobs
+
+    return _fetch_boards(cfg["company_boards"].get("lever", []), fetch_one)
 
 
 def fetch_ashby(cfg: dict, attempt: int = 0) -> list[Job]:
-    jobs: list[Job] = []
-    for token in cfg["company_boards"].get("ashby", []):
+    def fetch_one(token: str) -> list[Job]:
         try:
             page = requests.get(f"https://api.ashbyhq.com/posting-api/job-board/{token}", timeout=30)
             page.raise_for_status()
             data = page.json()
         except requests.RequestException:
-            continue
+            return []
         items = data.get("jobs") if isinstance(data, dict) else (data if isinstance(data, list) else [])
         if not items:
-            continue
+            return []
+        jobs = []
         for it in items:
             title = _pick(it, "title", "jobTitle", "name")
             loc = _pick(it, "location", "locationName", "officeLocation", "workLocation")
@@ -110,12 +122,13 @@ def fetch_ashby(cfg: dict, attempt: int = 0) -> list[Job]:
                 country=cfg.get("country", ""), posted_date=_normalize_date(_pick(it, "createdAt", "publishedAt", "date")),
                 source="ashby", url=str(url or ""), description=str(_pick(it, "description", "descriptionPlain", "content") or ""),
             ))
-    return jobs
+        return jobs
+
+    return _fetch_boards(cfg["company_boards"].get("ashby", []), fetch_one)
 
 
 def fetch_workday(cfg: dict, attempt: int = 0) -> list[Job]:
-    jobs: list[Job] = []
-    for token in cfg["company_boards"].get("workday", []):
+    def fetch_one(token: str) -> list[Job]:
         domain = token if "." in token else f"{token}.workdayjobs.com"
         base = f"https://{domain}" if not domain.startswith("http") else domain.rstrip("/")
         try:
@@ -123,7 +136,8 @@ def fetch_workday(cfg: dict, attempt: int = 0) -> list[Job]:
             page.raise_for_status()
             html = page.text
         except requests.RequestException:
-            continue
+            return []
+        jobs = []
         for m in re.finditer(r"href=[\"']((?:https?://[^\"']+?/job/[^\"']+|/wday/cxs/[^\"']+?/job/[^\"']+))[\'\"]", html, re.I):
             href = m.group(1)
             if not href.startswith("http"):
@@ -135,4 +149,6 @@ def fetch_workday(cfg: dict, attempt: int = 0) -> list[Job]:
                 country=cfg.get("country", ""), posted_date="",
                 source="workday", url=href, description="",
             ))
-    return jobs
+        return jobs
+
+    return _fetch_boards(cfg["company_boards"].get("workday", []), fetch_one)

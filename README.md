@@ -51,6 +51,9 @@ collect -> normalize -> label_fresher -> classify -> store -> analyze -> verify 
 | verify | `app/verify.py` | source health, small sample, spikes, unclassified share -> confidence |
 | report | `app/report.py` | Markdown report in `reports/` |
 
+Live sources and company boards are fetched in bounded parallel batches to reduce collection time. The existing
+Adzuna page limit and retry behavior are unchanged.
+
 ## Limits to keep in mind
 
 - Numbers describe postings **in your configured sources**, not the whole market. The report says so.

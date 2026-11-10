@@ -1,5 +1,6 @@
 """Run with:  python -m unittest discover tests"""
 import unittest
+import threading
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -114,6 +115,20 @@ class Sources(unittest.TestCase):
         get.side_effect = requests.exceptions.ConnectionError("DNS failed")
         cfg = {**CFG, "company_boards": {"workday": ["totally-unknown-company"]}}
         self.assertEqual(ats.fetch_workday(cfg), [])
+
+    @patch("app.sources.ats.requests.get")
+    def test_greenhouse_boards_are_fetched_concurrently(self, get):
+        barrier = threading.Barrier(4)
+
+        def response(*args, **kwargs):
+            barrier.wait(timeout=2)
+            result = MagicMock()
+            result.json.return_value = {"jobs": []}
+            return result
+
+        get.side_effect = response
+        cfg = {**CFG, "company_boards": {"greenhouse": ["one", "two", "three", "four"]}}
+        self.assertEqual(ats.fetch_greenhouse(cfg), [])
 
 
 class Config(unittest.TestCase):

@@ -1,11 +1,46 @@
 """Adzuna job search API (free tier: https://developer.adzuna.com)."""
 import time
+from concurrent.futures import ThreadPoolExecutor
+
 import requests
 
 from ..config import env
 from ..models import Job, SourceConfigError
 
 BASE = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
+MAX_WORKERS = 8
+
+
+def _fetch_search(cfg: dict, app_id: str, app_key: str, country: str,
+                  keyword: str, city: str) -> list[Job]:
+    jobs: list[Job] = []
+    for page in (1, 2, 3):
+        params = {
+            "app_id": app_id, "app_key": app_key, "results_per_page": 50,
+            "what": keyword, "max_days_old": cfg.get("max_days_old", 14),
+            "sort_by": "date", "content-type": "application/json",
+        }
+        if city:
+            params["where"] = city
+        r = requests.get(BASE.format(country=country, page=page), params=params, timeout=30)
+        r.raise_for_status()
+        results = r.json().get("results", [])
+        for it in results:
+            loc = (it.get("location") or {}).get("area") or []
+            jobs.append(Job(
+                title=it.get("title", ""),
+                company=(it.get("company") or {}).get("display_name", "Unknown"),
+                city=loc[-1] if loc else (it.get("location") or {}).get("display_name", ""),
+                country=country,
+                posted_date=(it.get("created") or "")[:10],
+                source="adzuna", url=it.get("redirect_url", ""),
+                description=it.get("description", ""),
+                salary_text=_salary(it),
+            ))
+        if len(results) < 50:
+            break
+        time.sleep(0.4)  # be polite between pages of the same search
+    return jobs
 
 
 def fetch(cfg: dict, attempt: int = 0) -> list[Job]:
@@ -14,36 +49,15 @@ def fetch(cfg: dict, attempt: int = 0) -> list[Job]:
         raise SourceConfigError("ADZUNA_APP_ID / ADZUNA_APP_KEY not set (see .env.example)")
     country = cfg.get("country", "in")
     cities = cfg.get("cities") or [""]
-    jobs: list[Job] = []
-    for keyword in cfg["search_keywords"]:
-        for city in cities:
-            for page in (1, 2, 3):
-                params = {
-                    "app_id": app_id, "app_key": app_key, "results_per_page": 50,
-                    "what": keyword, "max_days_old": cfg.get("max_days_old", 14),
-                    "sort_by": "date", "content-type": "application/json",
-                }
-                if city:
-                    params["where"] = city
-                r = requests.get(BASE.format(country=country, page=page), params=params, timeout=30)
-                r.raise_for_status()
-                results = r.json().get("results", [])
-                for it in results:
-                    loc = (it.get("location") or {}).get("area") or []
-                    jobs.append(Job(
-                        title=it.get("title", ""),
-                        company=(it.get("company") or {}).get("display_name", "Unknown"),
-                        city=loc[-1] if loc else (it.get("location") or {}).get("display_name", ""),
-                        country=country,
-                        posted_date=(it.get("created") or "")[:10],
-                        source="adzuna", url=it.get("redirect_url", ""),
-                        description=it.get("description", ""),
-                        salary_text=_salary(it),
-                    ))
-                if len(results) < 50:
-                    break
-                time.sleep(0.4)  # be polite to the API
-    return jobs
+    searches = [(keyword, city) for keyword in cfg["search_keywords"] for city in cities]
+    if not searches:
+        return []
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(searches))) as executor:
+        batches = executor.map(
+            lambda query: _fetch_search(cfg, app_id, app_key, country, *query),
+            searches,
+        )
+        return [job for batch in batches for job in batch]
 
 
 def _salary(it: dict) -> str:
