@@ -16,7 +16,7 @@ def _client():
 
 def _ask(system: str, user: str, max_tokens: int = 2000) -> str:
     resp = _client().messages.create(
-        model=env("LLM_MODEL", "claude-sonnet-5"), max_tokens=max_tokens,
+        model=env("LLM_MODEL", "claude-haiku-5-5"), max_tokens=max_tokens,
         system=system, messages=[{"role": "user", "content": user}],
     )
     return "".join(b.text for b in resp.content if getattr(b, "text", None))

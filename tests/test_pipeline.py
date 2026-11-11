@@ -170,6 +170,26 @@ class Config(unittest.TestCase):
         self.assertTrue(any("beta-labs" in slug for slug in merged.get("lever", [])))
 
 
+class LLM(unittest.TestCase):
+    def test_uses_fast_default_model(self):
+        with patch("app.llm._client") as client_factory, patch(
+            "app.llm.env", side_effect=lambda *args: args[-1]
+        ):
+            response = MagicMock()
+            response.content = [MagicMock(text="fast response")]
+            client_factory.return_value.messages.create.return_value = response
+
+            from app.llm import _ask
+
+            self.assertEqual(_ask("system", "user"), "fast response")
+            client_factory.return_value.messages.create.assert_called_once_with(
+                model="claude-haiku-5-5",
+                max_tokens=2000,
+                system="system",
+                messages=[{"role": "user", "content": "user"}],
+            )
+
+
 class Verify(unittest.TestCase):
     def test_failed_source_triggers_retry_then_stops(self):
         m = {"empty": False, "fresher_now": 100, "fresher_prev": 90, "fresher_change_pct": 11,

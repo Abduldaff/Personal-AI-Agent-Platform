@@ -29,7 +29,8 @@ Demo data is **synthetic** and stored in `data/jobs_demo.db`, separate from live
 3. (Recommended) add company career pages to `company_boards` (Greenhouse / Lever slugs).
    Open `https://boards.greenhouse.io/<slug>` or `https://jobs.lever.co/<slug>` to confirm a slug exists.
 4. `python run.py` then `streamlit run ui.py` and choose **Live data**.
-5. Optional: `ANTHROPIC_API_KEY` (better labelling + narrative), `TAVILY_API_KEY` (market news).
+5. Optional: `ANTHROPIC_API_KEY` (AI labelling + narrative; defaults to the faster Claude Haiku 5.5),
+   `LLM_MODEL` (override the model, e.g. `claude-sonnet-5-5`), `TAVILY_API_KEY` (market news).
 6. Schedule: `python scheduler.py --hour 7` runs the full pipeline daily.
 
 ## Pipeline (LangGraph, `app/graph.py`)
